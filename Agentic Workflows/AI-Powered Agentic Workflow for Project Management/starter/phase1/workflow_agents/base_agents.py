@@ -202,7 +202,10 @@ class RAGKnowledgePromptAgent:
                 "end_char": end
             })
 
-            start = end - self.chunk_overlap
+            if end == len(text):
+                break
+            else:
+                start = end - self.chunk_overlap
             chunk_id += 1
 
         with open(f"chunks-{self.unique_filename}", 'w', newline='', encoding='utf-8') as csvfile:
@@ -300,10 +303,11 @@ class EvaluationAgent:
             )
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
-                messages= [
+                messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": eval_prompt}
-                ]# TODO: 5 - Define the message structure sent to the LLM for evaluation (use temperature=0)
+                ], # TODO: 5 - Define the message structure sent to the LLM for evaluation (use temperature=0)
+                temprature=0
             )
             evaluation = response.choices[0].message.content.strip()
             print(f"Evaluator Agent Evaluation:\n{evaluation}")
