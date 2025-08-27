@@ -307,7 +307,7 @@ class EvaluationAgent:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": eval_prompt}
                 ], # TODO: 5 - Define the message structure sent to the LLM for evaluation (use temperature=0)
-                temprature=0
+                temperature=0
             )
             evaluation = response.choices[0].message.content.strip()
             print(f"Evaluator Agent Evaluation:\n{evaluation}")

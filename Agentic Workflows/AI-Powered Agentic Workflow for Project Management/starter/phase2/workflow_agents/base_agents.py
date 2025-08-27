@@ -1,6 +1,5 @@
 # TODO: 1 - import the OpenAI class from the openai library
 from openai import OpenAI
-import json
 import numpy as np
 import pandas as pd
 import re
@@ -203,7 +202,10 @@ class RAGKnowledgePromptAgent:
                 "end_char": end
             })
 
-            start = end - self.chunk_overlap
+            if end == len(text):
+                break
+            else:
+                start = end - self.chunk_overlap
             chunk_id += 1
 
         with open(f"chunks-{self.unique_filename}", 'w', newline='', encoding='utf-8') as csvfile:
@@ -301,10 +303,11 @@ class EvaluationAgent:
             )
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
-                messages= [
+                messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": eval_prompt}
-                ]# TODO: 5 - Define the message structure sent to the LLM for evaluation (use temperature=0)
+                ], # TODO: 5 - Define the message structure sent to the LLM for evaluation (use temperature=0)
+                temperature=0
             )
             evaluation = response.choices[0].message.content.strip()
             print(f"Evaluator Agent Evaluation:\n{evaluation}")
@@ -412,63 +415,41 @@ class RoutingAgent():
         return best_agent["func"](user_input)
 
 
+
 class ActionPlanningAgent:
+
     def __init__(self, openai_api_key, knowledge):
+        # TODO: 1 - Initialize the agent attributes here
         self.openai_api_key = openai_api_key
         self.knowledge = knowledge
 
     def extract_steps_from_prompt(self, prompt):
-        client = OpenAI(
-            base_url="https://openai.vocareum.com/v1/",
-            api_key=self.openai_api_key
-        )
 
-        system_prompt = (
-            "You are an action planning agent. Using your knowledge, extract from the user "
-            "prompt the steps requested to complete the action the user is asking for.\n"
-            "OUTPUT FORMAT (MANDATORY): Return ONLY a JSON array of strings. No headings, "
-            "no prose, no numbering, no extra keys. Each element is one concise step in "
-            "imperative voice (e.g., \"Define personas\"). Max 10 steps.\n"
-            "Forget any previous context.\n"
-            f"This is your knowledge: {self.knowledge}"
-        )
-
-        resp = client.chat.completions.create(
+        # TODO: 2 - Instantiate the OpenAI client using the provided API key
+        client = OpenAI(base_url = "https://openai.vocareum.com/v1/", 
+                        api_key=self.openai_api_key)
+        # TODO: 3 - Call the OpenAI API to get a response from the "gpt-3.5-turbo" model.
+        # Provide the following system prompt along with the user's prompt:
+        # "You are an action planning agent. Using your knowledge, you extract from the user prompt the steps requested to complete the action the user is asking for. You return the steps as a list. Only return the steps in your knowledge. Forget any previous context. This is your knowledge: {pass the knowledge here}"
+        system_prompt = f"""
+            You are an action planning agent. Using your knowledge, you extract from the user
+            prompt the steps requested to complete the action the user is asking for. 
+            You return the steps as a list. 
+            Only return the steps in your knowledge. 
+            Forget any previous context. 
+            This is your knowledge: {self.knowledge}
+        """
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            temperature=0,
-            top_p=1,
             messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
+                {"role":"system", "content":system_prompt},
+                {"role":"user", "content":prompt}
+            ]
         )
-        response_text = resp.choices[0].message.content.strip()
 
-        # Preferred: parse the JSON array directly
-        try:
-            data = json.loads(response_text)
-            if isinstance(data, list):
-                steps = [s.strip() for s in data if isinstance(s, str) and s.strip()]
-                return steps
-        except Exception:
-            pass
+        response_text = response.choices[0].message.content.strip()  # TODO: 4 - Extract the response text from the OpenAI API response
 
-        # Fallback: line-by-line cleanup (handles cases where the model ignored JSON request)
-        lines = [ln.strip() for ln in response_text.splitlines() if ln.strip()]
+        # TODO: 5 - Clean and format the extracted steps by removing empty lines and unwanted text
+        steps = response_text.split("\n")
 
-        # Remove common headers/preambles
-        lines = [
-            ln for ln in lines
-            if not re.match(r'^(i can|here (are|is)|steps?:?)\b', ln, flags=re.I)
-        ]
-
-        # Strip leading numbering/bullets like "1. ", "2) ", "-", "*", "•"
-        cleaned = [
-            re.sub(r'^\s*(?:\d+[\.\)]\s*|[-*•]\s*)', '', ln).strip()
-            for ln in lines
-        ]
-
-        # Keep only non-empty lines
-        steps = [ln for ln in cleaned if ln]
         return steps
-
